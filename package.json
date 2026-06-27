@@ -1,0 +1,23 @@
+{
+  "name": "question",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sistema de geração e gerenciamento de questões educacionais com IA",
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:backend": "npm run start:dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "build": "npm run build --workspace=backend && npm run build --workspace=frontend",
+    "lint": "npm run lint --workspace=backend && npm run lint --workspace=frontend",
+    "db:migration:generate": "npm run typeorm --workspace=backend -- migration:generate",
+    "db:migration:run": "npm run typeorm --workspace=backend -- migration:run",
+    "db:migration:revert": "npm run typeorm --workspace=backend -- migration:revert"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
