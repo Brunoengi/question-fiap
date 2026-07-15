@@ -5,15 +5,15 @@ import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 
 interface Subject {
-  id: number;
+  id: string;
   name: string;
   topics: Topic[];
 }
 
 interface Topic {
-  id: number;
+  id: string;
   name: string;
-  subjectId: number;
+  subjectId: string;
 }
 
 interface Alternative {
@@ -23,13 +23,12 @@ interface Alternative {
 }
 
 interface QuestionData {
-  id: number;
-  subjectId: number;
-  topicId: number;
+  id: string;
+  subjectId: string;
+  topicId: string;
   type: string;
   difficulty: string;
   source: string;
-  status: string;
   statement: string;
   solution: string;
   tags: string[];
@@ -52,18 +51,18 @@ export default function EditQuestionPage({
 
   const [subjectId, setSubjectId] = useState("");
   const [topicId, setTopicId] = useState("");
-  const [type, setType] = useState("MULTIPLA_ESCOLHA");
-  const [difficulty, setDifficulty] = useState("FACIL");
+  const [type, setType] = useState("MULTIPLE_CHOICE");
+  const [difficulty, setDifficulty] = useState("EASY");
   const [statement, setStatement] = useState("");
   const [solution, setSolution] = useState("");
   const [tags, setTags] = useState("");
   const [source, setSource] = useState("");
-  const [status, setStatus] = useState("RASCUNHO");
   const [alternatives, setAlternatives] = useState<Alternative[]>([]);
+  const [error, setError] = useState("");
 
   const topics = useMemo(() => {
     if (!subjectId) return [];
-    return subjects.find((s) => s.id === Number(subjectId))?.topics ?? [];
+    return subjects.find((s) => s.id === subjectId)?.topics ?? [];
   }, [subjectId, subjects]);
 
   useEffect(() => {
@@ -85,7 +84,6 @@ export default function EditQuestionPage({
       setSolution(q.solution ?? "");
       setTags((q.tags ?? []).join(", "));
       setSource(q.source ?? "");
-      setStatus(q.status);
       setAlternatives(
         (q.alternatives ?? []).map((a) => ({
           label: a.label,
@@ -132,14 +130,14 @@ export default function EditQuestionPage({
   const handleSave = async () => {
     if (!subjectId || !topicId || !statement.trim()) return;
     setSaving(true);
+    setError("");
     try {
       await api.put(`/questions/${id}`, {
-        subjectId: Number(subjectId),
-        topicId: Number(topicId),
+        subjectId,
+        topicId,
         type,
         difficulty,
         source: source || undefined,
-        status,
         statement: statement.trim(),
         solution: solution.trim() || undefined,
         tags: tags
@@ -147,17 +145,26 @@ export default function EditQuestionPage({
           .map((t) => t.trim())
           .filter(Boolean),
         alternatives:
-          type === "MULTIPLA_ESCOLHA"
-            ? alternatives.map((a) => ({
+          type === "MULTIPLE_CHOICE"
+            ? alternatives.map((a, index) => ({
                 label: a.label,
                 text: a.text,
                 isCorrect: a.isCorrect,
+                order: index,
               }))
             : [],
       });
       router.push("/questions");
-    } catch {
-      // ignore
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "response" in err) {
+        const axiosErr = err as {
+          response?: { data?: { message?: string | string[] } };
+        };
+        const msg = axiosErr.response?.data?.message;
+        setError(Array.isArray(msg) ? msg.join(", ") : msg || "Erro ao salvar questão");
+      } else {
+        setError("Erro ao salvar questão");
+      }
     } finally {
       setSaving(false);
     }
@@ -187,7 +194,8 @@ export default function EditQuestionPage({
                 setSubjectId(e.target.value);
                 setTopicId("");
               }}
-              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300"
+              disabled
+              className="w-full border rounded px-3 py-2 text-sm bg-zinc-100 text-zinc-600 cursor-not-allowed focus:outline-none"
             >
               <option value="">Selecione...</option>
               {subjects.map((s) => (
@@ -203,8 +211,8 @@ export default function EditQuestionPage({
             <select
               value={topicId}
               onChange={(e) => setTopicId(e.target.value)}
-              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300"
-              disabled={!subjectId}
+              disabled
+              className="w-full border rounded px-3 py-2 text-sm bg-zinc-100 text-zinc-600 cursor-not-allowed focus:outline-none"
             >
               <option value="">Selecione...</option>
               {topics.map((t) => (
@@ -222,9 +230,9 @@ export default function EditQuestionPage({
                 <input
                   type="radio"
                   name="type"
-                  value="MULTIPLA_ESCOLHA"
-                  checked={type === "MULTIPLA_ESCOLHA"}
-                  onChange={() => setType("MULTIPLA_ESCOLHA")}
+                  value="MULTIPLE_CHOICE"
+                  checked={type === "MULTIPLE_CHOICE"}
+                  onChange={() => setType("MULTIPLE_CHOICE")}
                 />
                 Múltipla Escolha
               </label>
@@ -232,9 +240,9 @@ export default function EditQuestionPage({
                 <input
                   type="radio"
                   name="type"
-                  value="DESCRITIVA"
-                  checked={type === "DESCRITIVA"}
-                  onChange={() => setType("DESCRITIVA")}
+                  value="DESCRIPTIVE"
+                  checked={type === "DESCRIPTIVE"}
+                  onChange={() => setType("DESCRIPTIVE")}
                 />
                 Descritiva
               </label>
@@ -248,24 +256,12 @@ export default function EditQuestionPage({
             <select
               value={difficulty}
               onChange={(e) => setDifficulty(e.target.value)}
-              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300"
+              disabled
+              className="w-full border rounded px-3 py-2 text-sm bg-zinc-100 text-zinc-600 cursor-not-allowed focus:outline-none"
             >
-              <option value="FACIL">Fácil</option>
-              <option value="MEDIO">Médio</option>
-              <option value="DIFICIL">Difícil</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1">Status</label>
-            <select
-              value={status}
-              onChange={(e) => setStatus(e.target.value)}
-              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300"
-            >
-              <option value="RASCUNHO">Rascunho</option>
-              <option value="REVISAO">Revisão</option>
-              <option value="APROVADA">Aprovada</option>
+              <option value="EASY">Fácil</option>
+              <option value="MEDIUM">Médio</option>
+              <option value="HARD">Difícil</option>
             </select>
           </div>
 
@@ -275,7 +271,8 @@ export default function EditQuestionPage({
               type="text"
               value={source}
               onChange={(e) => setSource(e.target.value)}
-              className="w-full border rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300"
+              disabled
+              className="w-full border rounded px-3 py-2 text-sm bg-zinc-100 text-zinc-600 cursor-not-allowed focus:outline-none"
               placeholder="Ex: ENEM 2024"
             />
           </div>
@@ -303,7 +300,7 @@ export default function EditQuestionPage({
           />
         </div>
 
-        {type === "MULTIPLA_ESCOLHA" && (
+        {type === "MULTIPLE_CHOICE" && (
           <div>
             <div className="flex items-center justify-between mb-2">
               <label className="text-sm font-medium">Alternativas</label>
@@ -357,7 +354,7 @@ export default function EditQuestionPage({
         <div>
           <label className="block text-sm font-medium mb-1">
             Solução / Gabarito comentado
-            <span className="text-zinc-400 font-normal"> (opcional)</span>
+            <span className="text-zinc-600 font-normal"> (opcional)</span>
           </label>
           <textarea
             value={solution}
@@ -367,6 +364,12 @@ export default function EditQuestionPage({
             placeholder="Digite a solução ou comentário..."
           />
         </div>
+
+        {error && (
+          <div className="rounded-lg bg-red-50 px-4 py-2.5 text-sm text-red-600">
+            {error}
+          </div>
+        )}
 
         <div className="flex justify-end gap-3 pt-4 border-t">
           <button

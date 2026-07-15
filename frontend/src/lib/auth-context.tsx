@@ -33,28 +33,20 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(() => {
-    if (typeof window !== "undefined") {
-      const token = localStorage.getItem("accessToken");
-      const storedUser = localStorage.getItem("user");
-      if (token && storedUser) {
-        return JSON.parse(storedUser);
-      }
-    }
-    return null;
-  });
-
-  const [isLoading, setIsLoading] = useState(() => {
-    if (typeof window !== "undefined") {
-      return !!localStorage.getItem("accessToken");
-    }
-    return false;
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const token = localStorage.getItem("accessToken");
+    const storedUser = localStorage.getItem("user");
+
     if (!token) {
+      setIsLoading(false);
       return;
+    }
+
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
     }
 
     api

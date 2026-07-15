@@ -6,6 +6,11 @@ export enum LessonDifficulty {
   DIFICIL = 'dificil',
 }
 
+export enum LessonQuestionType {
+  MULTIPLE_CHOICE = 'MULTIPLE_CHOICE',
+  DESCRIPTIVE = 'DESCRIPTIVE',
+}
+
 export class GenerateLessonDto {
   @IsString()
   tema: string;
@@ -17,4 +22,7 @@ export class GenerateLessonDto {
 
   @IsEnum(LessonDifficulty)
   dificuldade: LessonDifficulty;
+
+  @IsEnum(LessonQuestionType)
+  tipoQuestao: LessonQuestionType;
 }

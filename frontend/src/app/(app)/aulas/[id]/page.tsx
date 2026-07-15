@@ -16,6 +16,7 @@ interface Questao {
   id: string;
   statement: string;
   difficulty: string;
+  type: string;
   solution: string;
   alternatives: Alternative[];
 }
@@ -229,7 +230,8 @@ export default function RevisaoAulaPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-zinc-500">
-              {questoes.length} questões de múltipla escolha
+              {questoes.length} questões{" "}
+              {questoes[0]?.type === "DESCRIPTIVE" ? "descritivas" : "de múltipla escolha"}
             </span>
             <button
               onClick={() => setGabarito(!gabarito)}

@@ -8,6 +8,7 @@ const API_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
 type Dificuldade = "facil" | "medio" | "dificil";
+type TipoQuestao = "MULTIPLE_CHOICE" | "DESCRIPTIVE";
 
 const quantidades = [5, 10, 15, 20];
 
@@ -16,6 +17,12 @@ const opcoesDificuldade: { valor: Dificuldade; label: string; desc: string }[] =
     { valor: "facil", label: "Fácil", desc: "Conceitos básicos, questões diretas" },
     { valor: "medio", label: "Médio", desc: "Interpretação e aplicação" },
     { valor: "dificil", label: "Difícil", desc: "Análise crítica e resolução complexa" },
+  ];
+
+const opcoesTipoQuestao: { valor: TipoQuestao; label: string; desc: string }[] =
+  [
+    { valor: "MULTIPLE_CHOICE", label: "Múltipla Escolha", desc: "Questões com 4 alternativas (A, B, C, D)" },
+    { valor: "DESCRIPTIVE", label: "Descritiva", desc: "Questões dissertativas, com gabarito comentado" },
   ];
 
 const sugestoes = [
@@ -30,6 +37,7 @@ export default function NovaAulaPage() {
   const [tema, setTema] = useState("");
   const [quantidade, setQuantidade] = useState(10);
   const [dificuldade, setDificuldade] = useState<Dificuldade>("medio");
+  const [tipoQuestao, setTipoQuestao] = useState<TipoQuestao>("MULTIPLE_CHOICE");
   const [gerando, setGerando] = useState(false);
   const [progresso, setProgresso] = useState("");
   const [erro, setErro] = useState("");
@@ -57,6 +65,7 @@ export default function NovaAulaPage() {
           tema: tema.trim(),
           quantidadeQuestoes: quantidade,
           dificuldade,
+          tipoQuestao,
         }),
       });
 
@@ -157,12 +166,44 @@ export default function NovaAulaPage() {
           </div>
         </div>
 
+        {/* Tipo de questão */}
+        <div className="bg-white rounded-xl border border-zinc-200 p-6">
+          <label className="block text-sm font-semibold text-zinc-900 mb-1">
+            Tipo de questão
+          </label>
+          <p className="text-xs text-zinc-400 mb-4">Formato das questões geradas pela IA</p>
+          <div className="grid grid-cols-2 gap-3">
+            {opcoesTipoQuestao.map((op) => (
+              <button
+                key={op.valor}
+                type="button"
+                disabled={gerando}
+                onClick={() => setTipoQuestao(op.valor)}
+                className={`flex flex-col items-start gap-1 p-4 rounded-lg border-2 transition-colors text-left disabled:opacity-50 ${
+                  tipoQuestao === op.valor
+                    ? "border-blue-600 bg-blue-50"
+                    : "border-zinc-200 hover:border-zinc-300"
+                }`}
+              >
+                <span className={`font-medium text-sm ${tipoQuestao === op.valor ? "text-blue-700" : "text-zinc-900"}`}>
+                  {op.label}
+                </span>
+                <span className="text-xs text-zinc-400">{op.desc}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Quantidade */}
         <div className="bg-white rounded-xl border border-zinc-200 p-6">
           <label className="block text-sm font-semibold text-zinc-900 mb-1">
             Quantidade de questões
           </label>
-          <p className="text-xs text-zinc-400 mb-4">Questões de múltipla escolha geradas pela IA</p>
+          <p className="text-xs text-zinc-400 mb-4">
+            {tipoQuestao === "MULTIPLE_CHOICE"
+              ? "Questões de múltipla escolha geradas pela IA"
+              : "Questões descritivas geradas pela IA"}
+          </p>
           <div className="grid grid-cols-4 gap-3">
             {quantidades.map((q) => (
               <button
@@ -242,8 +283,11 @@ export default function NovaAulaPage() {
               <>
                 <span className="font-semibold">Resumo:</span> aula de{" "}
                 <span className="font-semibold">"{tema || "..."}"</span> com{" "}
-                <span className="font-semibold">{quantidade} questões</span> no nível{" "}
-                <span className="font-semibold">{dificuldade}</span>
+                <span className="font-semibold">{quantidade} questões</span>{" "}
+                <span className="font-semibold">
+                  {tipoQuestao === "MULTIPLE_CHOICE" ? "múltipla escolha" : "descritivas"}
+                </span>{" "}
+                no nível <span className="font-semibold">{dificuldade}</span>
               </>
             )}
           </div>

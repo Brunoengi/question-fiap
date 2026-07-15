@@ -66,7 +66,7 @@ export class Question {
   @Column({ type: 'jsonb', default: [] })
   tags: string[];
 
-  @Column({ type: 'enum', enum: QuestionStatus, default: QuestionStatus.DRAFT })
+  @Column({ type: 'enum', enum: QuestionStatus, default: QuestionStatus.PUBLISHED })
   status: QuestionStatus;
 
   @Column({ type: 'boolean', default: true })

@@ -14,5 +14,6 @@ export class CreateAlternativeDto {
 
   @IsInt()
   @Min(0)
-  order: number;
+  @IsOptional()
+  order?: number;
 }

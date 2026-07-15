@@ -17,7 +17,6 @@ interface Question {
   topicId: number;
   type: string;
   difficulty: string;
-  status: string;
   createdAt: string;
   topic?: Topic;
   source?: string;
@@ -30,29 +29,61 @@ interface Subject {
 }
 
 const DIFFICULTY_MAP: Record<string, string> = {
-  FACIL: "Fácil",
-  MEDIO: "Médio",
-  DIFICIL: "Difícil",
+  EASY: "Fácil",
+  MEDIUM: "Médio",
+  HARD: "Difícil",
 };
 
 const TYPE_MAP: Record<string, string> = {
-  MULTIPLA_ESCOLHA: "Múltipla Escolha",
-  DESCRITIVA: "Descritiva",
+  MULTIPLE_CHOICE: "Múltipla Escolha",
+  DESCRIPTIVE: "Descritiva",
 };
 
-const STATUS_MAP: Record<string, string> = {
-  RASCUNHO: "Rascunho",
-  REVISAO: "Revisão",
-  APROVADA: "Aprovada",
-};
+function ConfirmModal({
+  open,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+}: {
+  open: boolean;
+  title: string;
+  message: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center">
+      <div className="absolute inset-0 bg-black/50" onClick={onCancel} />
+      <div className="relative bg-white rounded-lg shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 className="text-lg font-semibold mb-2">{title}</h2>
+        <p className="text-sm text-zinc-600 mb-6">{message}</p>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={onCancel}
+            className="px-4 py-2 text-sm border rounded hover:bg-zinc-50 cursor-pointer"
+          >
+            Não
+          </button>
+          <button
+            onClick={onConfirm}
+            className="px-4 py-2 text-sm bg-red-600 text-white rounded hover:bg-red-700 cursor-pointer"
+          >
+            Sim, excluir
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function badgeColor(val: string) {
-  if (val === "FACIL" || val === "RASCUNHO") return "bg-zinc-100 text-zinc-700";
-  if (val === "MEDIO" || val === "REVISAO") return "bg-yellow-100 text-yellow-700";
-  if (val === "DIFICIL") return "bg-red-100 text-red-700";
-  if (val === "APROVADA") return "bg-green-100 text-green-700";
-  if (val === "MULTIPLA_ESCOLHA") return "bg-blue-100 text-blue-700";
-  if (val === "DESCRITIVA") return "bg-purple-100 text-purple-700";
+  if (val === "EASY") return "bg-zinc-100 text-zinc-700";
+  if (val === "MEDIUM") return "bg-yellow-100 text-yellow-700";
+  if (val === "HARD") return "bg-red-100 text-red-700";
+  if (val === "MULTIPLE_CHOICE") return "bg-blue-100 text-blue-700";
+  if (val === "DESCRIPTIVE") return "bg-purple-100 text-purple-700";
   return "bg-zinc-100 text-zinc-700";
 }
 
@@ -64,6 +95,7 @@ export default function QuestionsPage() {
   const [loading, setLoading] = useState(true);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
+  const [refreshKey, setRefreshKey] = useState(0);
   const limit = 10;
 
   const [filters, setFilters] = useState({
@@ -71,13 +103,12 @@ export default function QuestionsPage() {
     topicId: "",
     type: "",
     difficulty: "",
-    status: "",
     source: "",
     search: "",
   });
 
   const [selected, setSelected] = useState<Set<number>>(new Set());
-  const [viewQuestion, setViewQuestion] = useState<Question | null>(null);
+  const [questionToDelete, setQuestionToDelete] = useState<number | null>(null);
 
   const topics = useMemo(() => {
     if (!filters.subjectId) return [];
@@ -98,20 +129,19 @@ export default function QuestionsPage() {
     if (filters.topicId) params.set("topicId", filters.topicId);
     if (filters.type) params.set("type", filters.type);
     if (filters.difficulty) params.set("difficulty", filters.difficulty);
-    if (filters.status) params.set("status", filters.status);
     if (filters.source) params.set("source", filters.source);
     if (filters.search) params.set("search", filters.search);
 
     api.get(`/questions?${params.toString()}`).then((res) => {
       if (cancelled) return;
       setQuestions(res.data.data ?? res.data);
-      setTotal(res.data.total ?? 0);
+      setTotal(res.data.meta?.total ?? res.data.total ?? 0);
     }).finally(() => {
       if (!cancelled) setLoading(false);
     });
 
     return () => { cancelled = true; };
-  }, [page, limit, filters]);
+  }, [page, limit, filters, refreshKey]);
 
   const toggleSelect = (id: number) => {
     setSelected((prev) => {
@@ -129,11 +159,12 @@ export default function QuestionsPage() {
     }
   };
 
-  const deleteQuestion = async (id: number) => {
-    if (!window.confirm("Excluir esta questão?")) return;
+  const confirmDeleteQuestion = async () => {
+    if (questionToDelete === null) return;
     try {
-      await api.delete(`/questions/${id}`);
-      setPage(1);
+      await api.delete(`/questions/${questionToDelete}`);
+      setQuestionToDelete(null);
+      setRefreshKey((k) => k + 1);
     } catch {
       // ignore
     }
@@ -150,16 +181,10 @@ export default function QuestionsPage() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Questões</h1>
-        <button
-          onClick={() => router.push("/questions/new")}
-          className="bg-zinc-900 text-white px-4 py-2 rounded text-sm hover:bg-zinc-800 cursor-pointer"
-        >
-          Nova Questão
-        </button>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border p-4 mb-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
+      <div className="bg-white rounded-xl shadow-sm border border-zinc-200 p-4 mb-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
           <select
             value={filters.subjectId}
             onChange={(e) => {
@@ -172,7 +197,7 @@ export default function QuestionsPage() {
             }}
             className="border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300"
           >
-            <option value="">Disciplina</option>
+            <option value="">Tema</option>
             {subjects.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
@@ -205,8 +230,8 @@ export default function QuestionsPage() {
             className="border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300"
           >
             <option value="">Tipo</option>
-            <option value="MULTIPLA_ESCOLHA">Múltipla Escolha</option>
-            <option value="DESCRITIVA">Descritiva</option>
+            <option value="MULTIPLE_CHOICE">Múltipla Escolha</option>
+            <option value="DESCRIPTIVE">Descritiva</option>
           </select>
 
           <select
@@ -218,23 +243,9 @@ export default function QuestionsPage() {
             className="border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300"
           >
             <option value="">Dificuldade</option>
-            <option value="FACIL">Fácil</option>
-            <option value="MEDIO">Médio</option>
-            <option value="DIFICIL">Difícil</option>
-          </select>
-
-          <select
-            value={filters.status}
-            onChange={(e) => {
-              setFilters((f) => ({ ...f, status: e.target.value }));
-              setPage(1);
-            }}
-            className="border rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300"
-          >
-            <option value="">Status</option>
-            <option value="RASCUNHO">Rascunho</option>
-            <option value="REVISAO">Revisão</option>
-            <option value="APROVADA">Aprovada</option>
+            <option value="EASY">Fácil</option>
+            <option value="MEDIUM">Médio</option>
+            <option value="HARD">Difícil</option>
           </select>
 
           <input
@@ -267,7 +278,7 @@ export default function QuestionsPage() {
         </div>
       ) : (
         <>
-          <div className="bg-white rounded-lg shadow-sm border overflow-x-auto">
+          <div className="bg-white rounded-xl shadow-sm border border-zinc-200 overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-zinc-50 border-b">
                 <tr>
@@ -286,21 +297,20 @@ export default function QuestionsPage() {
                     Enunciado
                   </th>
                   <th className="text-left px-3 py-2 font-medium">
-                    Disciplina
+                    Tema
                   </th>
                   <th className="text-left px-3 py-2 font-medium">Tópico</th>
                   <th className="text-left px-3 py-2 font-medium">Tipo</th>
                   <th className="text-left px-3 py-2 font-medium">
                     Dificuldade
                   </th>
-                  <th className="text-left px-3 py-2 font-medium">Status</th>
                   <th className="text-left px-3 py-2 font-medium">Data</th>
                   <th className="text-left px-3 py-2 font-medium">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {questions.map((q) => (
-                  <tr key={q.id} className="border-b hover:bg-zinc-50">
+                  <tr key={q.id} className="border-b bg-zinc-50 hover:bg-zinc-100">
                     <td className="px-3 py-2">
                       <input
                         type="checkbox"
@@ -328,26 +338,13 @@ export default function QuestionsPage() {
                         {DIFFICULTY_MAP[q.difficulty] ?? q.difficulty}
                       </span>
                     </td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs ${badgeColor(q.status)}`}
-                      >
-                        {STATUS_MAP[q.status] ?? q.status}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-xs text-zinc-500">
+                    <td className="px-3 py-2 text-xs text-zinc-600">
                       {q.createdAt
                         ? new Date(q.createdAt).toLocaleDateString("pt-BR")
                         : "-"}
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => setViewQuestion(q)}
-                          className="text-xs text-blue-600 hover:text-blue-800 cursor-pointer"
-                        >
-                          Ver
-                        </button>
                         <button
                           onClick={() =>
                             router.push(`/questions/edit/${q.id}`)
@@ -357,7 +354,7 @@ export default function QuestionsPage() {
                           Editar
                         </button>
                         <button
-                          onClick={() => deleteQuestion(q.id)}
+                          onClick={() => setQuestionToDelete(q.id)}
                           className="text-xs text-red-600 hover:text-red-800 cursor-pointer"
                         >
                           Excluir
@@ -368,7 +365,7 @@ export default function QuestionsPage() {
                 ))}
                 {questions.length === 0 && (
                   <tr>
-                    <td colSpan={9} className="text-center py-12 text-zinc-500">
+                    <td colSpan={8} className="text-center py-12 text-zinc-600">
                       Nenhuma questão encontrada.
                     </td>
                   </tr>
@@ -379,7 +376,7 @@ export default function QuestionsPage() {
 
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-4 text-sm">
-              <span className="text-zinc-500">
+              <span className="text-zinc-600">
                 {total} resultado{total !== 1 ? "s" : ""} — Página {page} de{" "}
                 {totalPages}
               </span>
@@ -404,57 +401,13 @@ export default function QuestionsPage() {
         </>
       )}
 
-      {viewQuestion && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black/50"
-            onClick={() => setViewQuestion(null)}
-          />
-          <div className="relative bg-white rounded-lg shadow-xl w-full max-w-2xl mx-4 p-6 max-h-[80vh] overflow-y-auto">
-            <h2 className="text-lg font-semibold mb-4">
-              Detalhes da Questão
-            </h2>
-            <div className="space-y-3 text-sm">
-              <p>
-                <strong>Enunciado:</strong> {viewQuestion.statement}
-              </p>
-              <p>
-                <strong>Disciplina:</strong>{" "}
-                {getSubjectName(viewQuestion.subjectId)}
-              </p>
-              <p>
-                <strong>Tópico:</strong> {getTopicName(viewQuestion)}
-              </p>
-              <p>
-                <strong>Tipo:</strong>{" "}
-                {TYPE_MAP[viewQuestion.type] ?? viewQuestion.type}
-              </p>
-              <p>
-                <strong>Dificuldade:</strong>{" "}
-                {DIFFICULTY_MAP[viewQuestion.difficulty] ??
-                  viewQuestion.difficulty}
-              </p>
-              <p>
-                <strong>Status:</strong>{" "}
-                {STATUS_MAP[viewQuestion.status] ?? viewQuestion.status}
-              </p>
-              {viewQuestion.source && (
-                <p>
-                  <strong>Fonte:</strong> {viewQuestion.source}
-                </p>
-              )}
-            </div>
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={() => setViewQuestion(null)}
-                className="px-4 py-2 text-sm border rounded hover:bg-zinc-50 cursor-pointer"
-              >
-                Fechar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        open={questionToDelete !== null}
+        title="Excluir questão"
+        message="Tem certeza que deseja excluir esta questão? Essa ação não pode ser desfeita."
+        onConfirm={confirmDeleteQuestion}
+        onCancel={() => setQuestionToDelete(null)}
+      />
     </div>
   );
 }
