@@ -8,17 +8,9 @@ import { Alternative } from '../questions/entities/alternative.entity';
 import { Exam, ExamStatus } from '../exams/entities/exam.entity';
 import { ExamQuestion } from '../exams/entities/exam-question.entity';
 import type { IAiProvider } from '../chat/interfaces/ai-provider.interface';
-import { GenerateLessonDto, LessonDifficulty } from './dto/generate-lesson.dto';
+import { GenerateLessonDto, LessonDifficulty, LessonQuestionType } from './dto/generate-lesson.dto';
 
-const SYSTEM_PROMPT = `
-Você é um assistente educacional especializado em criar aulas completas para o ensino médio.
-Gere o conteúdo pedagógico em português brasileiro.
-Retorne APENAS um JSON válido, sem texto antes ou depois, no seguinte formato:
-{
-  "content": "## Título\\n\\nConteúdo em markdown com seções ##, listas, fórmulas, etc.",
-  "objectives": ["objetivo 1", "objetivo 2", "objetivo 3"],
-  "questions": [
-    {
+const MULTIPLE_CHOICE_QUESTION_FORMAT = `    {
       "statement": "Enunciado da questão?",
       "alternatives": [
         { "label": "A", "text": "Texto da alternativa A", "isCorrect": false },
@@ -27,10 +19,33 @@ Retorne APENAS um JSON válido, sem texto antes ou depois, no seguinte formato:
         { "label": "D", "text": "Texto da alternativa D", "isCorrect": false }
       ],
       "solution": "Explicação detalhada da resposta correta."
-    }
+    }`;
+
+const DESCRIPTIVE_QUESTION_FORMAT = `    {
+      "statement": "Enunciado dissertativo da questão?",
+      "alternatives": [],
+      "solution": "Resposta esperada / gabarito comentado."
+    }`;
+
+function buildSystemPrompt(tipoQuestao: LessonQuestionType): string {
+  const questionFormat =
+    tipoQuestao === LessonQuestionType.MULTIPLE_CHOICE
+      ? MULTIPLE_CHOICE_QUESTION_FORMAT
+      : DESCRIPTIVE_QUESTION_FORMAT;
+
+  return `
+Você é um assistente educacional especializado em criar aulas completas para o ensino médio.
+Gere o conteúdo pedagógico em português brasileiro.
+Retorne APENAS um JSON válido, sem texto antes ou depois, no seguinte formato:
+{
+  "content": "## Título\\n\\nConteúdo em markdown com seções ##, listas, fórmulas, etc.",
+  "objectives": ["objetivo 1", "objetivo 2", "objetivo 3"],
+  "questions": [
+${questionFormat}
   ]
 }
 `.trim();
+}
 
 const DIFFICULTY_MAP: Record<LessonDifficulty, Difficulty> = {
   [LessonDifficulty.FACIL]: Difficulty.EASY,
@@ -58,12 +73,19 @@ export class LessonsService {
   ) {}
 
   async *generate(userId: string, dto: GenerateLessonDto): AsyncIterable<string> {
-    const userMessage = `Crie uma aula completa sobre "${dto.tema}" com ${dto.quantidadeQuestoes} questões de múltipla escolha no nível ${dto.dificuldade}. Cada questão deve ter exatamente 4 alternativas (A, B, C, D).`;
+    const isMultipleChoice = dto.tipoQuestao === LessonQuestionType.MULTIPLE_CHOICE;
+
+    const tipoLabel = isMultipleChoice
+      ? 'de múltipla escolha'
+      : 'descritivas (dissertativas)';
+    const userMessage = `Crie uma aula completa sobre "${dto.tema}" com ${dto.quantidadeQuestoes} questões ${tipoLabel} no nível ${dto.dificuldade}.${
+      isMultipleChoice ? ' Cada questão deve ter exatamente 4 alternativas (A, B, C, D).' : ''
+    }`;
 
     let fullContent = '';
     for await (const token of this.aiProvider.chat(
       [{ role: 'user', content: userMessage }],
-      SYSTEM_PROMPT,
+      buildSystemPrompt(dto.tipoQuestao),
     )) {
       fullContent += token;
       yield token;
@@ -87,7 +109,7 @@ export class LessonsService {
         subjectId: subject.id,
         topicId: topic.id,
         statement: q.statement,
-        type: QuestionType.MULTIPLE_CHOICE,
+        type: isMultipleChoice ? QuestionType.MULTIPLE_CHOICE : QuestionType.DESCRIPTIVE,
         difficulty,
         solution: q.solution ?? '',
         source: QuestionSource.AI_GENERATED,
@@ -96,7 +118,7 @@ export class LessonsService {
       });
       const saved = await this.questionRepo.save(question);
 
-      const alternatives = (q.alternatives ?? []).map((alt: any, i: number) =>
+      const alternatives = (isMultipleChoice ? q.alternatives ?? [] : []).map((alt: any, i: number) =>
         this.alternativeRepo.create({
           questionId: saved.id,
           label: alt.label,

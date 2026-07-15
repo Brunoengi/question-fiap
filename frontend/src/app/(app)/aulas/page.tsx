@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import api from "@/lib/api";
 
@@ -40,7 +39,6 @@ function formatarData(iso: string) {
 }
 
 export default function AulasPage() {
-  const router = useRouter();
   const [aulas, setAulas] = useState<Aula[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [busca, setBusca] = useState("");
@@ -53,9 +51,9 @@ export default function AulasPage() {
         const comConteudo = (data as Aula[]).filter((e) => e.content);
         setAulas(comConteudo);
       })
-      .catch(() => router.push("/login"))
+      .catch(() => {})
       .finally(() => setCarregando(false));
-  }, [router]);
+  }, []);
 
   const filtradas = aulas.filter((a) => {
     const dif = inferirDificuldade(a);

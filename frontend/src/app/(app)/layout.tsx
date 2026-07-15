@@ -12,7 +12,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (!isLoading && !user) {
-      router.push("/login");
+      router.push("/inicio");
     }
   }, [user, isLoading, router]);
 
@@ -43,9 +43,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2">
             <Link href="/aulas" className={linkClass("/aulas")}>
               Aulas IA
-            </Link>
-            <Link href="/subjects" className={linkClass("/subjects")}>
-              Disciplinas
             </Link>
             <Link href="/questions" className={linkClass("/questions")}>
               Questões

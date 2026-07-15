@@ -106,8 +106,11 @@ export class QuestionsService {
     });
 
     if (alternatives && alternatives.length > 0) {
-      question.alternatives = alternatives.map((alt) =>
-        this.alternativeRepository.create(alt),
+      question.alternatives = alternatives.map((alt, index) =>
+        this.alternativeRepository.create({
+          ...alt,
+          order: alt.order ?? index,
+        }),
       );
     }
 
@@ -125,10 +128,17 @@ export class QuestionsService {
     Object.assign(question, data);
 
     if (alternatives !== undefined) {
-      await this.alternativeRepository.delete({ questionId: id });
-      question.alternatives = alternatives.map((alt) =>
-        this.alternativeRepository.create(alt),
+      question.alternatives = alternatives.map((alt, index) =>
+        this.alternativeRepository.create({
+          ...alt,
+          order: alt.order ?? index,
+        }),
       );
+
+      return this.questionRepository.manager.transaction(async (manager) => {
+        await manager.delete(Alternative, { questionId: id });
+        return manager.save(Question, question);
+      });
     }
 
     return this.questionRepository.save(question);

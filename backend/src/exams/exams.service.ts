@@ -18,10 +18,19 @@ export class ExamsService {
     private readonly examRepository: Repository<Exam>,
     @InjectRepository(ExamQuestion)
     private readonly examQuestionRepository: Repository<ExamQuestion>,
+    @InjectRepository(Question)
+    private readonly questionRepository: Repository<Question>,
   ) {}
 
+  private removeInactiveQuestions(exam: Exam): Exam {
+    exam.examQuestions = (exam.examQuestions ?? []).filter(
+      (eq) => eq.question?.isActive,
+    );
+    return exam;
+  }
+
   async findAll(userId: string): Promise<Exam[]> {
-    return this.examRepository.find({
+    const exams = await this.examRepository.find({
       where: { userId },
       relations: {
         subject: true,
@@ -29,6 +38,8 @@ export class ExamsService {
       },
       order: { createdAt: 'DESC' },
     });
+
+    return exams.map((exam) => this.removeInactiveQuestions(exam));
   }
 
   async findOne(id: string, userId: string): Promise<Exam> {
@@ -44,7 +55,7 @@ export class ExamsService {
       throw new NotFoundException('Prova não encontrada');
     }
 
-    return exam;
+    return this.removeInactiveQuestions(exam);
   }
 
   async create(userId: string, dto: CreateExamDto): Promise<Exam> {
@@ -92,7 +103,23 @@ export class ExamsService {
 
   async remove(id: string, userId: string): Promise<void> {
     const exam = await this.findOne(id, userId);
+
+    const examQuestions = await this.examQuestionRepository.find({
+      where: { examId: id },
+    });
+    const questionIds = examQuestions.map((eq) => eq.questionId);
+
     await this.examRepository.remove(exam);
+
+    if (questionIds.length > 0) {
+      await this.questionRepository
+        .createQueryBuilder()
+        .update(Question)
+        .set({ isActive: false })
+        .where('userId = :userId', { userId })
+        .andWhere('id IN (:...ids)', { ids: questionIds })
+        .execute();
+    }
   }
 
   async updateStatus(id: string, userId: string, dto: UpdateStatusDto): Promise<Exam> {
@@ -110,12 +137,14 @@ export class ExamsService {
       .createQueryBuilder('q')
       .where('q.type = :type', { type: 'MULTIPLE_CHOICE' })
       .andWhere('q.status = :status', { status: 'PUBLISHED' })
+      .andWhere('q.isActive = :isActive', { isActive: true })
       .andWhere('q.subjectId = :subjectId', { subjectId: dto.subjectId });
 
     const descriptiveQb = questionRepo
       .createQueryBuilder('q')
       .where('q.type = :type', { type: 'DESCRIPTIVE' })
       .andWhere('q.status = :status', { status: 'PUBLISHED' })
+      .andWhere('q.isActive = :isActive', { isActive: true })
       .andWhere('q.subjectId = :subjectId', { subjectId: dto.subjectId });
 
     if (dto.difficulty) {

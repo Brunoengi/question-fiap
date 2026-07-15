@@ -34,7 +34,7 @@ export default function RegisterPage() {
 
     try {
       await register(name, email, password);
-      router.push("/");
+      router.push("/aulas");
     } catch (err: unknown) {
       if (err && typeof err === "object" && "response" in err) {
         const axiosErr = err as {
